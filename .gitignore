@@ -1,0 +1,54 @@
+# .gitignore
+
+# CMake build artifacts
+/build/
+
+# Compiled Object files
+*.o
+*.obj
+*.lo
+*.slo
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+
+# Compiled Static libraries
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+
+# OS generated files
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE / Editor specific files
+.vscode/
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.bak
+*~
+*.tmp
+*.user
+*.suo
+*.sdf
+*.opensdf
+*.opendb
+*.un~
+
+*.bin
+external
+target

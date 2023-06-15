@@ -1,0 +1,78 @@
+name: Product Firmware Release
+
+# This workflow runs when we manually trigger it.
+# Trigger it by going to the Actions tab in your repository and clicking the "Run workflow" button.
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Compile with automatic versioning
+        id: compile
+        uses: particle-iot/compile-action@v1
+        with:
+          particle-access-token: ${{ secrets.PARTICLE_ACCESS_TOKEN_21813 }}
+          particle-platform-name: 'argon'
+          device-os-version: '4.x'
+          sources-folder: 'product-firmware'
+          auto-version: true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          path: ${{ steps.compile.outputs.firmware-path }}
+
+      - name: Commit updated version file
+        id: commit
+        if: steps.compile.outputs.firmware-version-updated == 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git commit -m "Update firmware version" -a
+          echo "updated-version-sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      # When a GitHub Action pushes commits or tags, it does not trigger a new GitHub Action job
+      - name: Push changes
+        if: steps.compile.outputs.firmware-version-updated == 'true'
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+
+      - name: Create GitHub release
+        id: release
+        if: steps.compile.outputs.firmware-version-updated == 'true'
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: ${{ steps.compile.outputs.firmware-path }}
+          generateReleaseNotes: 'true'
+          name: "Firmware v${{ steps.compile.outputs.firmware-version }}"
+          tag: "v${{ steps.compile.outputs.firmware-version }}"
+          commit: ${{ steps.commit.outputs.updated-version-sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload product firmware to Particle
+        if: steps.compile.outputs.firmware-version-updated == 'true'
+        uses: particle-iot/firmware-upload-action@v1
+        with:
+          particle-access-token: ${{ secrets.PARTICLE_ACCESS_TOKEN_21813 }}
+          firmware-path: ${{ steps.compile.outputs.firmware-path }}
+          firmware-version: ${{ steps.compile.outputs.firmware-version }}
+          product-id: '19626'
+          title: "Firmware v${{ steps.compile.outputs.firmware-version }}"
+          description: "[Firmware v${{ steps.compile.outputs.firmware-version }} GitHub Release](${{ steps.release.outputs.html_url }})"
+
+      - name: Flash new firmware version to development device
+        if: steps.compile.outputs.firmware-version-updated == 'true'
+        uses: particle-iot/flash-device-action@v1
+        with:
+          particle-access-token: ${{ secrets.PARTICLE_ACCESS_TOKEN_21813 }}
+          device-id: 'e00fce68ae40842eb4570366'
+          firmware-path: ${{ steps.compile.outputs.firmware-path }}
