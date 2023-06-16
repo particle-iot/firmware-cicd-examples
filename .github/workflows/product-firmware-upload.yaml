@@ -1,4 +1,4 @@
-name: Product Firmware Release
+name: Product Firmware Upload
 
 # This workflow runs when we manually trigger it.
 # Trigger it by going to the Actions tab in your repository and clicking the "Run workflow" button.
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  release:
+  upload:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
