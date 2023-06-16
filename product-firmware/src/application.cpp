@@ -2,7 +2,7 @@
 
 TM1637 tm1637(D2,D3);
 
-PRODUCT_VERSION(1);
+PRODUCT_VERSION(2);
 
 void setup() {
   tm1637.init();
