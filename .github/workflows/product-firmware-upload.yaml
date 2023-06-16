@@ -65,7 +65,7 @@ jobs:
           particle-access-token: ${{ secrets.PARTICLE_ACCESS_TOKEN_21813 }}
           firmware-path: ${{ steps.compile.outputs.firmware-path }}
           firmware-version: ${{ steps.compile.outputs.firmware-version }}
-          product-id: '19626'
+          product-id: '21813'
           title: "Firmware v${{ steps.compile.outputs.firmware-version }}"
           description: "[Firmware v${{ steps.compile.outputs.firmware-version }} GitHub Release](${{ steps.release.outputs.html_url }})"
 
