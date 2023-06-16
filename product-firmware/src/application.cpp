@@ -25,6 +25,6 @@ void loop() {
   tm1637.display(3, 13);
 
   delay(3000);
-  tm1637.clearDisplay();3
+  tm1637.clearDisplay();
   delay(1000);
 }
