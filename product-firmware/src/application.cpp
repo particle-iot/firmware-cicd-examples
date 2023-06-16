@@ -14,5 +14,17 @@ void setup() {
 }
 
 void loop() {
+  tm1637.point(POINT_ON);
 
+  tm1637.display(0, 12);
+  delay(200);
+  tm1637.display(1, 1);
+  delay(200);
+  tm1637.display(2, 12);
+  delay(200);
+  tm1637.display(3, 13);
+
+  delay(3000);
+  tm1637.clearDisplay();3
+  delay(1000);
 }
