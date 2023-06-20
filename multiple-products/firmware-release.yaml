@@ -1,0 +1,186 @@
+name: Firmware Release
+
+# This workflow runs when we manually trigger it.
+# Trigger it by going to the Actions tab in your repository and clicking the 'Run workflow' button.
+on:
+  workflow_dispatch:
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      firmware-version: ${{ steps.compile.outputs.firmware-version }}
+      firmware-version-updated: ${{ steps.compile.outputs.firmware-version-updated }}
+      updated-version-sha: ${{ steps.commit.outputs.updated-version-sha }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Update product firmware version and compile
+        id: compile
+        uses: particle-iot/compile-action@v1
+        with:
+          # The build job compiles for each platform, so we just need to pick one of our platforms for the version job
+          particle-platform-name: 'boron'
+          auto-version: true
+
+      - name: Commit updated version file
+        id: commit
+        if: steps.compile.outputs.firmware-version-updated == 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Update firmware version' -a
+          echo "updated-version-sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      # When a GitHub Action pushes commits or tags, it does not trigger a new GitHub Action job
+      - name: Push changes
+        if: steps.compile.outputs.firmware-version-updated == 'true'
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+
+  build:
+    needs: version
+    if: needs.version.outputs.firmware-version-updated == 'true'
+    strategy:
+      matrix:
+        platform: [ photon, electron, argon, boron, bsom, b5som ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Pull latest changes
+        run: |
+          git pull
+
+      - name: Compile application
+        id: compile
+        uses: particle-iot/compile-action@v1
+        with:
+          particle-platform-name: ${{ matrix.platform }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: firmware-${{ matrix.platform }}-${{ needs.version.outputs.firmware-version }}
+          path: |
+            ${{ steps.compile.outputs.firmware-path }}
+            ${{ steps.compile.outputs.target-path }}
+
+  release:
+    needs: [ build, version ]
+    if: needs.version.outputs.firmware-version-updated == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      release_url: ${{ steps.release.outputs.html_url }}
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: build-artifacts
+
+      - name: Archive all build artifacts
+        id: archive
+        run: |
+          ARTIFACTS=""
+          for dir in build-artifacts/*; do
+            tar -czf $dir.tar.gz $dir
+            ARTIFACTS="$ARTIFACTS,$dir.tar.gz"
+          done
+          # Trim the leading comma
+          ARTIFACTS=${ARTIFACTS#,}
+          echo "artifacts=$ARTIFACTS" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub release
+        id: release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: ${{ steps.archive.outputs.artifacts }}
+          generateReleaseNotes: 'true'
+          name: 'Firmware v${{ needs.version.outputs.firmware-version }}'
+          tag: 'v${{ needs.version.outputs.firmware-version }}'
+          commit: ${{ needs.version.outputs.updated-version-sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  upload:
+    needs: [ build, version, release ]
+    if: needs.version.outputs.firmware-version-updated == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - platform: photon
+            product-id: <photon-product-id>
+          - platform: electron
+            product-id: <electron-product-id>
+          - platform: boron
+            product-id: <boron-product-id>
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: build-artifacts
+
+      - name: Find bin file for platform
+        id: find-bin
+        run: |
+          BIN_FILE=$(find build-artifacts -name 'firmware-*.bin' | grep ${{ matrix.platform }} | head -n 1)
+          echo "bin-file=$BIN_FILE" >> $GITHUB_OUTPUT
+
+      - name: Set product access token secret from matrix
+        run: |
+          echo "PRODUCT_ACCESS_TOKEN=$(echo ${{ secrets[format('PARTICLE_ACCESS_TOKEN_{0}', matrix.product-id)] }})" >> $GITHUB_ENV
+
+      - name: Upload product firmware to Particle
+        uses: particle-iot/firmware-upload-action@v1
+        with:
+          particle-access-token: ${{ env.PRODUCT_ACCESS_TOKEN }}
+          firmware-path: ${{ steps.find-bin.outputs.bin-file }}
+          firmware-version: ${{ needs.version.outputs.firmware-version }}
+          product-id: ${{ matrix.product-id }}
+          title: 'Firmware v${{ needs.version.outputs.firmware-version }}'
+          description: '[Firmware v${{ needs.version.outputs.firmware-version }} GitHub Release](${{ needs.release.outputs.release_url }})'
+
+  flash:
+    needs: [ build, version, release, upload ]
+    if: needs.version.outputs.firmware-version-updated == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - platform: photon
+            product-id: <photon-product-id>
+            device-id: <photon-development-device-id>
+          - platform: electron
+            product-id: <electron-product-id-two>
+            device-id: <electron-development-device-id>
+          - platform: boron
+            product-id: <boron-product-id-three>
+            device-id: <boron-development-device-id>
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: build-artifacts
+
+      - name: Find firmware bin file to flash
+        id: find-bin
+        run: |
+          BIN_FILE=$(find build-artifacts -name 'firmware-*.bin' | grep ${{ matrix.platform }} | head -n 1)
+          echo "bin-file=$BIN_FILE" >> $GITHUB_OUTPUT
+
+      - name: Set product access token secret from matrix
+        run: |
+          echo "PRODUCT_ACCESS_TOKEN=$(echo ${{ secrets[format('PARTICLE_ACCESS_TOKEN_{0}', matrix.product-id)] }})" >> $GITHUB_ENV
+
+      - name: Flash firmware to test device
+        uses: particle-iot/flash-device-action@v1
+        with:
+          particle-access-token: ${{ env.PRODUCT_ACCESS_TOKEN }}
+          device-id: ${{ matrix.device-id }}
+          firmware-path: ${{ steps.find-bin.outputs.bin-file }}
