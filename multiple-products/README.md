@@ -16,8 +16,8 @@ This example demonstrates how to use GitHub Actions to build and release firmwar
      Each API User needs the `devices:update` and `firmware:create` scopes to successfully run these pipelines.
    * If your product id is `1234`, then the secret name should be `PARTICLE_ACCESS_TOKEN_1234`.
    * See [Particle docs](https://docs.particle.io/firmware/best-practices/github-actions/#obtain-an-access-token) and [GitHub docs](https://docs.github.com/en/actions/reference/encrypted-secrets#creating-encrypted-secrets-for-a-repository) for more information.
-1. Commit and push the workflows file to your repository.
+1. Commit and push the workflow files to your repository.
 1. The GitHub Actions workflow will automatically start compiling your firmware upon each push to the repository. You can view the status of the workflow in the "Actions" tab of your repository.
-1. When the push even occurs on the `main` branch, the compiled firmware will be flashed to the device specified.
+1. When the push even occurs on the `main` branch, the compiled firmware will be flashed to the devices specified.
 1. Trigger a firmware release upload by going to the Actions tab in your repository and clicking the 'Run workflow' button.
    * This won't OTA a fleet of devices. Only the development devices specified in the workflow receive OTAs. To release a new version to your fleet(s), you still need to log into the console and release the firmware to your fleet.
